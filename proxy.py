@@ -158,10 +158,14 @@ class ProxyThread(threading.Thread):
                 # note: there's also urlunparse(ParseResult)
                 url = urlparse(req.getURL())
     
-                # Do I have to do if it is not persistent connection?
-    
-                # Remove proxy infomation
-    
+                # Remove proxy infomation when doing persistent connection
+                # as there is a limit to number of persistent connection a client (in this case our proxy server)
+                # can maintain at the same time
+
+                if args.pc:
+                    # TODO remove proxy information
+                    pass
+
                 # Server connect
                 # and so on...
                 svr = socket(AF_INET, SOCK_STREAM)
@@ -184,15 +188,18 @@ class ProxyThread(threading.Thread):
                 if args.pc:
                     continue
                 else:
-                    return
+                    raise Exception
     
-            except KeyboardInterrupt as interrupt:
+            except KeyboardInterrupt:
                 print("Keyboard Interrupt...")
+            except socket.timeout:
+                print("Socket Timeout...")
             except Exception as e:
                 pass
             finally:
                 self.conn.shutdown(socket.SHUT_RDWR)
                 self.conn.close()
+                return
     
 def main():
     try:
