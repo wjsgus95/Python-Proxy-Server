@@ -550,7 +550,7 @@ class TCP(object):
             logger.info('Starting server on port %d' % self.port)
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind((self.hostname, self.port))
+            self.socket.bind(('0.0.0.0', self.port))
             self.socket.listen(self.backlog)
             while True:
                 conn, addr = self.socket.accept()
@@ -584,7 +584,7 @@ def main():
     )
 
     parser.add_argument('--hostname', default='127.0.0.1', help='Default: 127.0.0.1')
-    parser.add_argument('--port', default='8899', help='Default: 8899')
+    parser.add_argument('--port', default='3128', help='Default: 3128')
     parser.add_argument('--log-level', default='INFO', help='DEBUG, INFO, WARNING, ERROR, CRITICAL')
     args = parser.parse_args()
 

@@ -5,10 +5,7 @@ import sys; import signal
 import argparse
 
 def sig_handler(sig, frame):
-    for cli in clients:
-        cli.shutdown(socket.SHUT_RDWR)
-        cli.close()
-    sock.shutdown(socket.SHUT_RDWR)
+    sock.shutdown(SHUT_RDWR)
     sock.close()
     sys.exit(0)
 
@@ -17,11 +14,12 @@ signal.signal(signal.SIGINT, sig_handler)
 BUFSIZE = 2048
 TIMEOUT = 5
 HTTP_PORT = 80
+PROXY_PORT = 3128
 CRLF = '\r\n'
 
 parser = argparse.ArgumentParser()
 # in argparse: argument without dash is a required argument to be parsed
-parser.add_argument('port', type=int)
+parser.add_argument('port', type=int, default=PROXY_PORT)
 parser.add_argument('-mt', action='store_true')
 parser.add_argument('-pc', action='store_true')
 args = parser.parse_args()
@@ -146,17 +144,19 @@ class ProxyThread(threading.Thread):
         self.addr = addr  # Client address
 
     def __del__(self):
-        self.conn.shutdown(socket.SHUT_RDWR)
+        self.conn.shutdown(SHUT_RDWR)
         self.conn.close()
     
     # Thread Routine
     def run(self):
         while True:
             try:
+                print("threading.run start")
                 data = recvData(self.conn)
                 req = parseHTTP(data)
                 # note: there's also urlunparse(ParseResult)
                 url = urlparse(req.getURL())
+                print(url)
     
                 # Remove proxy infomation when doing persistent connection
                 # as there is a limit to number of persistent connection a client (in this case our proxy server)
@@ -170,16 +170,20 @@ class ProxyThread(threading.Thread):
                 # and so on...
                 svr = socket(AF_INET, SOCK_STREAM)
                 svr.connect((url.netloc, HTTP_PORT))
+                print("after svr connect")
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
                 svr.sendall(req.pack())
+                print("after srv sendall")
     
                 # receive data from the server
                 data = recvData(svr)
+                print("after recv data from svr")
                 res = parseHTTP(data)
                 cache[url] = res
                 self.conn.sendall(res)
+                print("after conn sendall")
 
                 # Set content length header
     
@@ -197,8 +201,6 @@ class ProxyThread(threading.Thread):
             except Exception as e:
                 pass
             finally:
-                self.conn.shutdown(socket.SHUT_RDWR)
-                self.conn.close()
                 return
     
 def main():
@@ -213,6 +215,9 @@ def main():
         while True:
             # Client connect
             conn, addr = sock.accept()
+            # interpolation available in Python3.6+
+            #print(f'new connection from {addr}')
+            print("new connection from " + str(addr))
             # Start Handling
             pt = ProxyThread(conn, addr)
             pt.start()
