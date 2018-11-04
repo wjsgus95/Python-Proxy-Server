@@ -1,0 +1,29 @@
+HTTP/1.1 200 OK
+Date: Thu, 01 Nov 2018 11:13:27 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 1236
+Connection: keep-alive
+Server: mw1284.eqiad.wmnet
+X-Powered-By: HHVM/3.18.6-dev
+P3P: CP="This is not a P3P policy! See https://en.wikipedia.org/wiki/Special:CentralAutoLogin/P3P for more info."
+Cache-control: private, must-revalidate, max-age=0
+Vary: Accept-Encoding,Treat-as-Untrusted,X-Forwarded-Proto,Cookie,Authorization
+Content-Disposition: inline; filename=api-result.json
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN
+Backend-Timing: D=30589 t=1541070807681904
+Content-Encoding: gzip
+X-Varnish: 753729865, 27375709, 857951279, 1005114179
+Via: 1.1 varnish (Varnish/5.1), 1.1 varnish (Varnish/5.1), 1.1 varnish (Varnish/5.1), 1.1 varnish (Varnish/5.1)
+Accept-Ranges: bytes
+Age: 0
+X-Cache: cp1077 pass, cp2019 pass, cp5010 pass, cp5008 pass
+X-Cache-Status: pass
+Strict-Transport-Security: max-age=106384710; includeSubDomains; preload
+Set-Cookie: WMF-Last-Access=01-Nov-2018;Path=/;HttpOnly;secure;Expires=Mon, 03 Dec 2018 00:00:00 GMT
+Set-Cookie: WMF-Last-Access-Global=01-Nov-2018;Path=/;Domain=.wikipedia.org;HttpOnly;secure;Expires=Mon, 03 Dec 2018 00:00:00 GMT
+X-Analytics: ns=-1;special=Badtitle;https=1;nocookies=1
+X-Client-IP: 112.220.157.6
+Set-Cookie: GeoIP=KR:11:Gangnam-gu:37.50:127.06:v4; Path=/; secure; Domain=.wikipedia.org
+
+{"batchcomplete":"","query":{"pages":{"21721040":{"pageid":21721040,"ns":0,"title":"Stack Overflow","extract":"Stack Overflow is a privately held website, the flagship site of the Stack Exchange Network, created in 2008 by Jeff Atwood and Joel Spolsky. It features questions and answers on a wide range of topics in computer programming. It was created to be a more open alternative to earlier question and answer sites such as Experts-Exchange. The name for the website was chosen by voting in April 2008 by readers of Coding Horror, Atwood's popular programming blog.The website serves as a platform for users to ask and answer questions, and, through membership and active participation, to vote questions and answers up or down and edit questions and answers in a fashion similar to a wiki or Digg. Users of Stack Overflow can earn reputation points and \"badges\"; for example, a person is awarded 10 reputation points for receiving an \"up\" vote on an answer given to a question and 5 points for the \"up\" vote of a question, and can receive badges for their valued contributions, which represents a kind of gamification of the traditional Q&A site. Users unlock new privileges with an increase in reputation like the ability to vote, comment, and even edit other people's posts. All user-generated content is licensed under a Creative Commons Attribute-ShareAlike license.Closing questions is a main differentiation from Yahoo! Answers and a way to prevent low quality questions. The mechanism was overhauled in 2013; questions edited after being put \"on hold\" now appear in a review queue. Jeff Atwood stated in 2010 that duplicate questions are not seen as a problem but rather they constitute an advantage if such additional questions drive extra traffic to the site by multiplying relevant keyword hits in search engines.As of  August 2018 Stack Overflow has over 9 million registered users, and it exceeded 16 million questions in mid 2018. Based on the type of tags assigned to questions, the top eight most discussed topics on the site are: JavaScript, Java,  C#, PHP, Android, Python, jQuery and HTML.Stack Overflow also has a Jobs section to assist developers in finding their next opportunity.  For employers, Stack Overflow provides tools to brand their business, advertise their openings on the site, and source candidates from Stack Overflow's database of developers who are open to being contacted."}}}}
