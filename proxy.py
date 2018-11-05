@@ -18,7 +18,7 @@ PROXY_PORT = 3128
 CRLF = '\r\n'
 
 parser = argparse.ArgumentParser()
-# in argparse: argument without dash is a required argument to be parsed
+# in argparse: argument without dash is a positional argument
 parser.add_argument('port', type=int, default=PROXY_PORT)
 parser.add_argument('-mt', action='store_true')
 parser.add_argument('-pc', action='store_true')
@@ -30,10 +30,10 @@ cache = {} # dict[url] = HTTPPacket
 # works
 def parseHTTP(data):
     data = data.decode()
-    line, data = data[0:data.index(CRLF)], data[data.index(CRLF)+1:-1]
+    line, data = data[0:data.index(CRLF)], data[data.index(CRLF)+len(CRLF):]
     data, body = data.split(CRLF+CRLF)
+    body = body.encode()
     data = data.split(CRLF)
-    data = data[1:]
 
     header = dict()
     for field in data:
@@ -59,7 +59,7 @@ def recvData(conn):
         data += conn.recv(BUFSIZE)
     packet = parseHTTP(data)
     body = packet.body
-    
+
     # Chunked-Encoding
     if packet.isChunked():
         readed = 0
@@ -92,7 +92,6 @@ def recvData(conn):
     
     packet.body = body
     return packet.pack()
-
 
 # HTTP packet class
 # Manage packet data and provide related functions
@@ -128,9 +127,16 @@ class HTTPPacket:
         pass
     
     # Get URL from request packet line
-    # works
     def getURL(self):
-        return self.line[self.line.index('GET')+4:]
+        return self.line.split(' ')[1]
+
+    # Remove hostname from request packet line
+    def setURL(self):
+        hostname = self.getHeader('Host')
+
+        new_line = self.line.split(' ')
+        new_line[1] = new_line[1][new_line[1].index(hostname)+len(hostname):]
+        self.line = ' '.join(new_line)
     
     def isChunked(self):
         return 'chunked' in self.getHeader('Transfer-Encoding')
@@ -151,18 +157,17 @@ class ProxyThread(threading.Thread):
     def run(self):
         while True:
             try:
-                print("threading.run start")
                 data = recvData(self.conn)
                 req = parseHTTP(data)
                 # note: there's also urlunparse(ParseResult)
                 url = urlparse(req.getURL())
-                print(url)
     
                 # Remove proxy infomation when doing persistent connection
                 # as there is a limit to number of persistent connection a client (in this case our proxy server)
                 # can maintain at the same time
 
                 if args.pc:
+                    req.setURL()
                     # TODO remove proxy information
                     pass
 
@@ -170,20 +175,17 @@ class ProxyThread(threading.Thread):
                 # and so on...
                 svr = socket(AF_INET, SOCK_STREAM)
                 svr.connect((url.netloc, HTTP_PORT))
-                print("after svr connect")
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
                 svr.sendall(req.pack())
-                print("after srv sendall")
     
                 # receive data from the server
                 data = recvData(svr)
-                print("after recv data from svr")
                 res = parseHTTP(data)
                 cache[url] = res
-                self.conn.sendall(res)
-                print("after conn sendall")
+                self.conn.sendall(res.pack())
+                svr.sendall(res.pack())
 
                 # Set content length header
     
