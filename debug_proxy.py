@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 from socket import *
 from urllib.parse import urlparse
 import threading
@@ -6,8 +7,9 @@ import sys
 import argparse
 
 
-BUFSIZE = 8192
-TIMEOUT = 10
+
+BUFSIZE = 2048
+TIMEOUT = 5
 HTTP_PORT = 80
 PROXY_PORT = 3128
 CRLF = '\r\n'
@@ -15,7 +17,7 @@ bCRLF = b'\r\n'
 
 parser = argparse.ArgumentParser()
 # in argparse: argument without dash is a positional argument
-parser.add_argument('port', type=int)
+parser.add_argument('port', type=int, default=PROXY_PORT)
 parser.add_argument('-mt', action='store_true')
 parser.add_argument('-pc', action='store_true')
 args = parser.parse_args()
@@ -133,9 +135,6 @@ class HTTPPacket:
     def getBodySize(self):
         return len(self.body)
 
-    def getMethod(self):
-        return self.line.split(' ')[0].upper()
-
     # Remove hostname from request packet line
     #def setURL(self):
     #    hostname = self.getHeader('Host')
@@ -149,9 +148,8 @@ class HTTPPacket:
 
 
 # Proxy handler thread class
-class ProxyThread(threading.Thread):
+class ProxyThread(object):
     def __init__(self, conn, addr):
-        super().__init__()
         self.conn = conn  # Client socket
         self.addr = addr  # Client address
         self.first_run = True
@@ -168,7 +166,6 @@ class ProxyThread(threading.Thread):
         while True:
             try:
                 data = recvData(self.conn)
-                print("client -> proxy received")
                 req = parseHTTP(data)
 
                 # note: there's also urlunparse(ParseResult)
@@ -178,15 +175,18 @@ class ProxyThread(threading.Thread):
                     print("Connection Closed")
                     return
 
-
                 # Remove proxy infomation when doing persistent connection
                 # https://www.oreilly.com/library/view/http-the-definitive/1565925092/ch04s05.html
                 if args.pc:
-                    req.setHeader('Connection', 'Keep-Alive')
-                    req.setHeader('Proxy-Connection', '')
-                    #req.setHeader('Keep-Alive', f'timeout={TIMEOUT}, max=1000')
+                    if req.getHeader('Connection').lower() != 'keep-alive':
+                        if req.getHeader('Proxy-Connection').lower() == 'keep-alive':
+                            req.setHeader('Connection', 'Keep-Alive')
+                        req.setHeader('Proxy-Connection', '')
+                    else:
+                        req.setHeader('Proxy-Connection', '')
                 else:
                     req.setHeader('Connection', '')
+                    req.setHeader('Keep-Alive', '')
 
                 print("requset:")
                 print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
@@ -198,23 +198,21 @@ class ProxyThread(threading.Thread):
                     svr = socket(AF_INET, SOCK_STREAM)
                     svr.connect((url.netloc, HTTP_PORT))
                     self.first_run = False
+
+                print("after svr connect\n")
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
                 svr.sendall(req.pack())
-                print("proxy -> server sent")
     
                 # receive data from the server
                 data = recvData(svr)
-                print("server -> proxy received")
+                print("after data recv\n")
                 res = parseHTTP(data)
                 self.conn.sendall(res.pack())
-                print("proxy -> client sent")
-
-                if args.pc:
-                    res.setHeader('Connection', 'Keep-Alive')
-                else:
-                    res.setHeader('Connection', 'Closed')
+                print("response:")
+                print(res.pack())
+                print('\n\n')
 
                 # Set content length header
                 res.setHeader('Content-Length', f'{res.getBodySize()}')
@@ -223,17 +221,12 @@ class ProxyThread(threading.Thread):
     
             except KeyboardInterrupt:
                 print("Child Thread Keyboard Interrupt...")
-                break
             except timeout:
                 print("Socket Timeout. Closing Connection...")
-                break
             except Exception as e:
                 print("Exception occured")
                 print(e)
-                break
             if args.pc == False : break
-            else: continue
-
         print("end of run return")
         return
             #finally:
@@ -254,15 +247,12 @@ def main():
         while True:
             # Client connect
             conn, addr = sock.accept()
-            # string interpolation available in Python3.6+
+            # interpolation available in Python3.6+
             #print(f'new connection from {addr}')
             print("new connection from " + str(addr))
             # Start Handling
             pt = ProxyThread(conn, addr)
-            pt.daemon = True
-            pt.start()
-            if args.mt == False:
-                pt.join()
+            pt.run()
             n += 1
             print(f'{n} threads have been created')
     except Exception as e:
