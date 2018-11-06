@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 import threading
 import sys
 import argparse
+import datetime
 
 
 BUFSIZE = 8192
@@ -39,7 +40,7 @@ def parseHTTP(data):
         idx = field.index(':')
         key = field[0:idx]
         value = field[idx+2:]
-        header[key] = value
+        header[key.lower()] = value.lower()
 
     #print("line: ", line)
     #print("header: ", header)
@@ -115,13 +116,13 @@ class HTTPPacket:
     # Get HTTP header value
     # If not exist, return empty string
     def getHeader(self, field):
-        return self.header.get(field, "")
+        return self.header.get(field.lower(), "")
     
     # Set HTTP header value
     # If not exist, add new field
     # If value is empty string, remove field
     def setHeader(self, field, value):
-        self.header[field] = value
+        self.header[field.lower()] = value.lower()
         if value == '':
             self.header.pop(field, None)
         pass
@@ -168,7 +169,7 @@ class ProxyThread(threading.Thread):
         while True:
             try:
                 data = recvData(self.conn)
-                print("client -> proxy received")
+                #print("client -> proxy")
                 req = parseHTTP(data)
 
                 # note: there's also urlunparse(ParseResult)
@@ -177,7 +178,6 @@ class ProxyThread(threading.Thread):
                 if req.getHeader('Connection').lower() == 'closed': 
                     print("Connection Closed")
                     return
-
 
                 # Remove proxy infomation when doing persistent connection
                 # https://www.oreilly.com/library/view/http-the-definitive/1565925092/ch04s05.html
@@ -188,9 +188,10 @@ class ProxyThread(threading.Thread):
                 else:
                     req.setHeader('Connection', '')
 
-                print("requset:")
-                print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
-                print('\n\n')
+                print('>', req.line)
+                #print("requset:")
+                #print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
+                #print('\n\n')
 
                 # Server connect
                 # and so on...
@@ -202,14 +203,15 @@ class ProxyThread(threading.Thread):
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
                 svr.sendall(req.pack())
-                print("proxy -> server sent")
+                #print("proxy -> server")
     
                 # receive data from the server
                 data = recvData(svr)
-                print("server -> proxy received")
+                #print("server -> proxy")
                 res = parseHTTP(data)
                 self.conn.sendall(res.pack())
-                print("proxy -> client sent")
+                print('<', res.line)
+                #print("proxy -> client")
 
                 if args.pc:
                     res.setHeader('Connection', 'Keep-Alive')
@@ -232,14 +234,8 @@ class ProxyThread(threading.Thread):
                 print(e)
                 break
             if args.pc == False : break
-            else: continue
-
-        print("end of run return")
+        #print("end of run return")
         return
-            #finally:
-            #    import pdb; pdb.set_trace()
-            #    print("finally return")
-            #    return
     
 def main():
     try:
@@ -248,23 +244,22 @@ def main():
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         sock.bind(('0.0.0.0', args.port))
         sock.listen(20)
-        print('Proxy Server started on port %d' % args.port)
-        n = 0
+        print('Proxy Server started on port %d' % args.port, end='')
+        print(f" at {str(datetime.datetime.now())}")
         
+        conn, addr = sock.accept()
         while True:
-            # Client connect
-            conn, addr = sock.accept()
             # string interpolation available in Python3.6+
             #print(f'new connection from {addr}')
-            print("new connection from " + str(addr))
+            print(f'> Connection from {addr[0]}:{addr[1]}')
             # Start Handling
             pt = ProxyThread(conn, addr)
             pt.daemon = True
             pt.start()
+            # Client connect
+            conn, addr = sock.accept()
             if args.mt == False:
                 pt.join()
-            n += 1
-            print(f'{n} threads have been created')
     except Exception as e:
         print(e)
         pass
@@ -277,7 +272,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    #data = open('http_get.txt', 'rb')
-    #data = data.read()
-
-    #print(parseHTTP(data).getURL())
