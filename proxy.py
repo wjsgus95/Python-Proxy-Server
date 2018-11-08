@@ -169,6 +169,9 @@ class ProxyThread(threading.Thread):
         while True:
             try:
                 data = recvData(self.conn)
+                if not data:
+                    print("Connection Closed")
+                    return
                 #print("client -> proxy")
                 req = parseHTTP(data)
 
