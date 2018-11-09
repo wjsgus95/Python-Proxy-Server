@@ -124,7 +124,7 @@ class HTTPPacket:
     def setHeader(self, field, value):
         self.header[field.lower()] = value.lower()
         if value == '':
-            self.header.pop(field, None)
+            self.header.pop(field.lower(), None)
         pass
     
     # Get URL from request packet line
