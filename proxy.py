@@ -8,9 +8,10 @@ import datetime
 
 
 BUFSIZE = 8192
-TIMEOUT = 10
+TIMEOUT = 1
 HTTP_PORT = 80
 PROXY_PORT = 3128
+COLON = ':'
 CRLF = '\r\n'
 bCRLF = b'\r\n'
 
@@ -167,8 +168,7 @@ class ProxyThread(threading.Thread):
     #remove this if not needed later 
     def sendConnectionEstablished(self):
         self.conn.sendall(bCRLF.join([
-            b'HTTP/1.1 200 Connection established',
-            b'Proxy-agent: proxy.py',
+            b'HTTP/1.1 200 Connection Established',
             bCRLF
         ]))
     
@@ -176,11 +176,13 @@ class ProxyThread(threading.Thread):
     def run(self):
         while True:
             try:
+                print("before recvData")
                 data = recvData(self.conn)
+                print("after recvData")
                 if not data:
                     print("Connection Closed")
                     return
-                #print("client -> proxy")
+                print("client -> proxy")
                 req = parseHTTP(data)
 
                 # note: there's also urlunparse(ParseResult)
@@ -199,47 +201,62 @@ class ProxyThread(threading.Thread):
                 else:
                     req.setHeader('Connection', '')
 
+                print("requset:")
                 print('>', req.line)
-                #print("requset:")
-                #print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
-                #print('\n\n')
+                print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
+                print('\n')
 
                 # Server connect
                 # and so on...
                 if self.first_run:
                     svr = socket(AF_INET, SOCK_STREAM)
-                    svr.connect((url.netloc, HTTP_PORT))
+                    if req.getMethod() == 'CONNECT':
+                        host, port = url.path.split(COLON)
+                        port = int(port)
+                    else:
+                        host = url.netloc
+                        port = HTTP_PORT
+                    
+                    svr.connect((host, port))
                     self.first_run = False
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
-                svr.sendall(req.pack())
-                #print("proxy -> server")
+                if req.getMethod() != 'CONNECT':
+                    svr.sendall(req.pack())
+                print("proxy -> server")
     
                 # receive data from the server
                 data = recvData(svr)
-                #print("server -> proxy")
+                print("server -> proxy")
                 res = parseHTTP(data)
+                print("initial response:")
+                print('<', res.line)
+                print(*[(k, v) for k, v in zip(res.header, res.header.values())], sep='\n')
+                print('\n')
                 if req.getMethod() == 'CONNECT':
-                    self.conn.sendall(bCRLF.join([
-                        b'HTTP/1.1 200 Connection established',
-                        b'Proxy-agent: proxy.py',
-                        bCRLF
-                    ]))
-                else:
-                    self.conn.sendall(res.pack())
-                    print('<', res.line)
-                #print("proxy -> client")
-
+                    res = bCRLF.join([
+                        b'HTTP/1.1 200 Connection Established',
+                        b'Connection: Closed',
+                        bCRLF])
+                    res = parseHTTP(res)
                 if args.pc:
                     res.setHeader('Connection', 'Keep-Alive')
                 else:
                     res.setHeader('Connection', 'Closed')
 
                 # Set content length header
-                res.setHeader('Content-Length', f'{res.getBodySize()}')
-    
+                #res.setHeader('Content-Length', str(res.getBodySize()))
+                res.setHeader('Content-Length', '')
+                #res.setHeader('Transfer-Encoding', '')
+
+                self.conn.sendall(res.pack())
+        
                 # If support pc, how to do socket and keep-alive?
+                print("response:")
+                print('<', res.line)
+                print(*[(k, v) for k, v in zip(res.header, res.header.values())], sep='\n')
+                print('\n')
     
             except KeyboardInterrupt:
                 print("Child Thread Keyboard Interrupt...")
@@ -251,7 +268,10 @@ class ProxyThread(threading.Thread):
                 print("Exception occured")
                 print(e)
                 break
-            if args.pc == False : break
+            else:
+                pass
+            #if args.pc == False : break
+            break
         #print("end of run return")
         return
     
@@ -263,19 +283,20 @@ def main():
         sock.bind(('0.0.0.0', args.port))
         sock.listen(20)
         print('Proxy Server started on port %d' % args.port, end='')
-        print(f" at {str(datetime.datetime.now())}")
+        #print(f" at {str(datetime.datetime.now())}")
         
         conn, addr = sock.accept()
+        print('> Connection from '+str(addr[0])+':'+str(addr[1]))
         while True:
             # string interpolation available in Python3.6+
             #print(f'new connection from {addr}')
-            print(f'> Connection from {addr[0]}:{addr[1]}')
             # Start Handling
             pt = ProxyThread(conn, addr)
             pt.daemon = True
             pt.start()
             # Client connect
             conn, addr = sock.accept()
+            print('> Connection from '+str(addr[0])+':'+str(addr[1]))
             if args.mt == False:
                 pt.join()
     except Exception as e:
