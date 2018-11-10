@@ -170,7 +170,7 @@ class ProxyThread(threading.Thread):
             b'HTTP/1.1 200 Connection established',
             b'Proxy-agent: proxy.py',
             bCRLF
-        ])
+        ]))
     
     # Thread Routine
     def run(self):
@@ -225,7 +225,7 @@ class ProxyThread(threading.Thread):
                         b'HTTP/1.1 200 Connection established',
                         b'Proxy-agent: proxy.py',
                         bCRLF
-                    ])
+                    ]))
                 else:
                     self.conn.sendall(res.pack())
                     print('<', res.line)
