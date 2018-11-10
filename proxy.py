@@ -163,6 +163,14 @@ class ProxyThread(threading.Thread):
             self.conn.close()
         except Exception:
             pass
+
+    #remove this if not needed later 
+    def sendConnectionEstablished(self):
+        self.conn.sendall(bCRLF.join([
+            b'HTTP/1.1 200 Connection established',
+            b'Proxy-agent: proxy.py',
+            bCRLF
+        ])
     
     # Thread Routine
     def run(self):
@@ -212,8 +220,15 @@ class ProxyThread(threading.Thread):
                 data = recvData(svr)
                 #print("server -> proxy")
                 res = parseHTTP(data)
-                self.conn.sendall(res.pack())
-                print('<', res.line)
+                if req.getMethod() == 'CONNECT':
+                    self.conn.sendall(bCRLF.join([
+                        b'HTTP/1.1 200 Connection established',
+                        b'Proxy-agent: proxy.py',
+                        bCRLF
+                    ])
+                else:
+                    self.conn.sendall(res.pack())
+                    print('<', res.line)
                 #print("proxy -> client")
 
                 if args.pc:
