@@ -74,6 +74,7 @@ def recvData(conn):
     # Set time out for error or persistent connection end
     conn.settimeout(TIMEOUT)
     data = conn.recv(BUFSIZE)
+    if not data: return None
     while b'\r\n\r\n' not in data:
         data += conn.recv(BUFSIZE)
     packet = parseHTTP(data)
