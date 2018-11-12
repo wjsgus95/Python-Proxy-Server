@@ -2,13 +2,13 @@
 from socket import *
 from urllib.parse import urlparse
 import threading
-import sys
+import sys; import os
 import argparse
 import datetime
 
 
 BUFSIZE = 8192
-TIMEOUT = 1
+TIMEOUT = 5
 HTTP_PORT = 80
 PROXY_PORT = 3128
 COLON = ':'
@@ -22,11 +22,24 @@ parser.add_argument('-mt', action='store_true')
 parser.add_argument('-pc', action='store_true')
 args = parser.parse_args()
 
-
 def sig_handler():
     sock.shutdown(SHUT_RDWR)
     sock.close()
     sys.exit(0)
+
+class Unbuffered(object):
+   def __init__(self, stream):
+       self.stream = stream
+   def write(self, data):
+       self.stream.write(data)
+       self.stream.flush()
+   def writelines(self, datas):
+       self.stream.writelines(datas)
+       self.stream.flush()
+   def __getattr__(self, attr):
+       return getattr(self.stream, attr)
+
+sys.stdout = Unbuffered(sys.stdout)
 
 # Dissect HTTP header into line(first line), header(second line to end), body
 # works
@@ -139,12 +152,10 @@ class HTTPPacket:
         return self.line.split(' ')[0].upper()
 
     # Remove hostname from request packet line
-    #def setURL(self):
-    #    hostname = self.getHeader('Host')
-
-    #    new_line = self.line.split(' ')
-    #    new_line[1] = new_line[1][new_line[1].index(hostname)+len(hostname):]
-    #    self.line = ' '.join(new_line)
+    def setURL(self, url):
+        new_line = self.line.split(' ')
+        new_line[1] = new_line[1].replace(url.netloc, '')
+        self.line = ' '.join(new_line)
     
     def isChunked(self):
         return 'chunked' in self.getHeader('Transfer-Encoding')
@@ -156,14 +167,21 @@ class ProxyThread(threading.Thread):
         super().__init__()
         self.conn = conn  # Client socket
         self.addr = addr  # Client address
+        self.svr = socket(AF_INET, SOCK_STREAM)
         self.first_run = True
 
     def __del__(self):
         try:
             self.conn.shutdown(SHUT_RDWR)
             self.conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print("client shutdown exception in del")
+            print(e)
+        try:
+            self.svr.close()
+        except Exception as e:
+            print("svr shutdown exception in del")
+            print(e)
 
     #remove this if not needed later 
     def sendConnectionEstablished(self):
@@ -200,6 +218,7 @@ class ProxyThread(threading.Thread):
                     #req.setHeader('Keep-Alive', f'timeout={TIMEOUT}, max=1000')
                 else:
                     req.setHeader('Connection', '')
+                #req.setURL(url)
 
                 print("requset:")
                 print('>', req.line)
@@ -209,7 +228,6 @@ class ProxyThread(threading.Thread):
                 # Server connect
                 # and so on...
                 if self.first_run:
-                    svr = socket(AF_INET, SOCK_STREAM)
                     if req.getMethod() == 'CONNECT':
                         host, port = url.path.split(COLON)
                         port = int(port)
@@ -217,17 +235,17 @@ class ProxyThread(threading.Thread):
                         host = url.netloc
                         port = HTTP_PORT
                     
-                    svr.connect((host, port))
+                    self.svr.connect((host, port))
                     self.first_run = False
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
                 if req.getMethod() != 'CONNECT':
-                    svr.sendall(req.pack())
+                    self.svr.sendall(req.pack())
                 print("proxy -> server")
     
                 # receive data from the server
-                data = recvData(svr)
+                data = recvData(self.svr)
                 print("server -> proxy")
                 res = parseHTTP(data)
                 print("initial response:")
@@ -262,7 +280,8 @@ class ProxyThread(threading.Thread):
                 print("Child Thread Keyboard Interrupt...")
                 break
             except timeout:
-                print("Socket Timeout. Closing Connection...")
+                print("Socket Timeout. Closing Connection...", flush=True)
+                #import pdb; pdb.set_trace()
                 break
             except Exception as e:
                 print("Exception occured")
@@ -270,9 +289,8 @@ class ProxyThread(threading.Thread):
                 break
             else:
                 pass
-            #if args.pc == False : break
-            break
-        #print("end of run return")
+            if args.pc == False : break
+        print("end of run return")
         return
     
 def main():
@@ -283,22 +301,22 @@ def main():
         sock.bind(('0.0.0.0', args.port))
         sock.listen(20)
         print('Proxy Server started on port %d' % args.port, end='')
-        #print(f" at {str(datetime.datetime.now())}")
+        print(f" at {str(datetime.datetime.now())}")
         
+        # Client connect
         conn, addr = sock.accept()
         print('> Connection from '+str(addr[0])+':'+str(addr[1]))
         while True:
-            # string interpolation available in Python3.6+
-            #print(f'new connection from {addr}')
             # Start Handling
             pt = ProxyThread(conn, addr)
             pt.daemon = True
             pt.start()
+            if args.mt == False:
+                pt.join()
+                pt = None
             # Client connect
             conn, addr = sock.accept()
             print('> Connection from '+str(addr[0])+':'+str(addr[1]))
-            if args.mt == False:
-                pt.join()
     except Exception as e:
         print(e)
         pass
