@@ -8,6 +8,7 @@ import datetime
 import gc
 from threading import Lock
 
+NOT_MODIFIED = 304
 
 BUFSIZE = 8192
 TIMEOUT = 1
@@ -49,6 +50,7 @@ sys.stdout = Unbuffered(sys.stdout)
 # Dissect HTTP header into line(first line), header(second line to end), body
 # works
 def parseHTTP(data):
+    if not data : return None
     line, data = data[0:data.index(bCRLF)], data[data.index(bCRLF)+len(bCRLF):]
     data, body = data[0:data.index(bCRLF+bCRLF)], data[data.index(bCRLF+bCRLF)+len(bCRLF+bCRLF):]
     data = data.split(bCRLF)
@@ -157,6 +159,9 @@ class HTTPPacket:
     def getMethod(self):
         return self.line.split(' ')[0].upper()
 
+    def getResponseCode(self):
+        return int(self.line.split(' ')[1])
+
     # Remove hostname from request packet line
     def setURL(self, url):
         new_line = self.line.split(' ')
@@ -182,13 +187,15 @@ class ProxyThread(threading.Thread):
             self.conn.shutdown(SHUT_RDWR)
             self.conn.close()
         except Exception as e:
-            print("client shutdown exception in del")
+            if args.debug: print("client shutdown exception in del")
             print(e)
         try:
             self.svr.close()
         except Exception as e:
-            print("svr shutdown exception in del")
+            if args.debug: print("svr shutdown exception in del")
             print(e)
+        finally:
+            print()
 
     #remove this if not needed later 
     def sendConnectionEstablished(self):
@@ -205,7 +212,7 @@ class ProxyThread(threading.Thread):
                 data = recvData(self.conn)
                 if args.debug: print("after recvData")
                 if not data:
-                    print("Connection Closed")
+                    if args.debug: print("Connection Closed")
                     return
                 if args.debug: print("client -> proxy")
                 req = parseHTTP(data)
@@ -291,27 +298,27 @@ class ProxyThread(threading.Thread):
                 # If support pc, how to do socket and keep-alive?
                 print(f'[{self.nr}]', '<', res.line)
                 print(f"[{self.nr}] < {res.getHeader('content-type')} {res.getHeader('content-length')} bytes")
-                print()
                 if args.debug:
                     print("response:")
                     print(*[(k, v) for k, v in zip(res.header, res.header.values())], sep='\n')
                     print('\n')
     
             except KeyboardInterrupt:
-                print("Child Thread Keyboard Interrupt...")
+                if args.debug: print("Child Thread Keyboard Interrupt...")
                 break
             except timeout:
-                print("Socket Timeout. Closing Connection...", flush=True)
+                if args.debug: print("Socket Timeout. Closing Connection...", flush=True)
                 #import pdb; pdb.set_trace()
                 break
             except Exception as e:
-                print("Exception occured")
-                print(e)
+                if args.debug: print("Exception occured")
+                if args.debug: print(e)
                 break
             else:
                 pass
             if not args.pc: break
             if res.getHeader('connection').lower() == 'closed': break
+            #if res.getResponseCode() == NOT_MODIFIED : break
         if args.debug: print("end of run return")
         return
     
@@ -355,10 +362,10 @@ def main():
             print(f"[{CONNECTION_NR}] {datetime.datetime.now()}")
             print(f'[{CONNECTION_NR}]', '> Connection from '+str(addr[0])+':'+str(addr[1]))
     except Exception as e:
-        print(e)
+        if args.debug: print(e)
         pass
     except KeyboardInterrupt:
-        print("Main Thread Keyboard Interrupt...")
+        if args.debug: print("Main Thread Keyboard Interrupt...")
         pass
     finally:
         sig_handler()
