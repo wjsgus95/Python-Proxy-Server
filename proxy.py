@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 from socket import *
 from urllib.parse import urlparse
 import threading
@@ -9,6 +10,7 @@ import gc
 from threading import Lock
 
 NOT_MODIFIED = 304
+lock = Lock()
 
 BUFSIZE = 8192
 TIMEOUT = 1
@@ -26,7 +28,7 @@ parser.add_argument('-pc', action='store_true')
 parser.add_argument('-debug', action='store_true')
 args = parser.parse_args()
 
-CONNECTION_NR = 1
+CONNECTION_NR = 0
 
 def sig_handler():
     sock.shutdown(SHUT_RDWR)
@@ -61,12 +63,8 @@ def parseHTTP(data):
         idx = field.index(':')
         key = field[0:idx]
         value = field[idx+2:]
-        header[key.lower()] = value.lower()
+        header[key.lower()] = value
 
-    #print("line: ", line)
-    #print("header: ", header)
-    #print("body: ", body)
-    
     return HTTPPacket(line, header, body)
 
 
@@ -147,7 +145,6 @@ class HTTPPacket:
         self.header[field.lower()] = value
         if value == '':
             self.header.pop(field.lower(), None)
-        pass
     
     # Get URL from request packet line
     def getURL(self):
@@ -179,8 +176,11 @@ class ProxyThread(threading.Thread):
         self.conn = conn  # Client socket
         self.addr = addr  # Client address
         self.svr = socket(AF_INET, SOCK_STREAM)
+
         self.first_run = True
         self.nr = nr
+        self.buffer = f"[{CONNECTION_NR}] {datetime.datetime.now()}\n"
+        self.buffer += f'[{CONNECTION_NR}] > Connection from '+str(addr[0])+':'+str(addr[1])+'\n'
 
     def __del__(self):
         try:
@@ -195,7 +195,9 @@ class ProxyThread(threading.Thread):
             if args.debug: print("svr shutdown exception in del")
             print(e)
         finally:
-            print()
+            lock.acquire()
+            print(self.buffer)
+            lock.release()
 
     #remove this if not needed later 
     def sendConnectionEstablished(self):
@@ -233,13 +235,16 @@ class ProxyThread(threading.Thread):
                 # Remove proxy infomation when doing persistent connection
                 # https://www.oreilly.com/library/view/http-the-definitive/1565925092/ch04s05.html
                 if args.pc:
-                    req.setHeader('Connection', 'Keep-Alive')
                     req.setHeader('Proxy-Connection', '')
-                    #req.setHeader('Keep-Alive', f'timeout={TIMEOUT}, max=1000') else:
-                    req.setHeader('Connection', '')
+                    #req.setHeader('Connection', 'Keep-Alive')
+                    #req.setHeader('Keep-Alive', f'timeout={TIMEOUT}, max=1000') 
+                else:
+                    req.setHeader('Proxy-Connection', '')
+                    req.setHeader('Connection', 'Closed')
                 #req.setURL(url)
 
-                print(f'[{self.nr}]', '>', req.line)
+                #print(f'[{self.nr}]', '>', req.line)
+                self.buffer += f'[{self.nr}] > {req.line}\n'
                 if args.debug:
                     print("requset:")
                     print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
@@ -249,8 +254,9 @@ class ProxyThread(threading.Thread):
                 # and so on...
                 if self.first_run:
                     if req.getMethod() == 'CONNECT':
-                        host, port = url.path.split(COLON)
-                        port = int(port)
+                        #host, port = url.path.split(COLON)
+                        #port = int(port)
+                        break
                     else:
                         host = url.netloc
                         port = HTTP_PORT
@@ -281,23 +287,25 @@ class ProxyThread(threading.Thread):
                         b'Connection: Closed',
                         bCRLF])
                     res = parseHTTP(res)
+
                 if args.pc:
                     if res.getHeader('Connection').lower() != 'closed':
                         res.setHeader('Connection', 'Keep-Alive')
+                    elif req.getHeader('Connection').lower() == 'closed':
+                        res.setHeader('Connection', 'Closed')
                 else:
                     res.setHeader('Connection', 'Closed')
 
                 # Set content length header
                 res.setHeader('Content-Length', str(res.getBodySize()))
-                #res.setHeader('Content-Encoding', 'x-gzip')
-                #res.setHeader('Content-Length', '')
-                #res.setHeader('Transfer-Encoding', '')
 
                 self.conn.sendall(res.pack())
         
                 # If support pc, how to do socket and keep-alive?
-                print(f'[{self.nr}]', '<', res.line)
-                print(f"[{self.nr}] < {res.getHeader('content-type')} {res.getHeader('content-length')} bytes")
+                #print(f'[{self.nr}]', '<', res.line)
+                #print(f"[{self.nr}] < {res.getHeader('content-type')} {res.getHeader('content-length')} bytes")
+                self.buffer += f'[{self.nr}] < {res.line}\n'
+                self.buffer += f"[{self.nr}] < {res.getHeader('content-type')} {res.getHeader('content-length')} bytes\n"
                 if args.debug:
                     print("response:")
                     print(*[(k, v) for k, v in zip(res.header, res.header.values())], sep='\n')
@@ -307,8 +315,8 @@ class ProxyThread(threading.Thread):
                 if args.debug: print("Child Thread Keyboard Interrupt...")
                 break
             except timeout:
-                if args.debug: print("Socket Timeout. Closing Connection...", flush=True)
-                #import pdb; pdb.set_trace()
+                #if args.debug: print("Socket Timeout. Closing Connection...", flush=True)
+                if args.debug: print("Socket Timeout. Closing Connection...")
                 break
             except Exception as e:
                 if args.debug: print("Exception occured")
@@ -344,25 +352,22 @@ def main():
         print(f" at {str(datetime.datetime.now())}")
         
         # Client connect
-        conn, addr = sock.accept()
-        print(f"[{CONNECTION_NR}] {datetime.datetime.now()}")
-        print(f'[{CONNECTION_NR}]', '> Connection from '+str(addr[0])+':'+str(addr[1]))
         while True:
+            # Client connect
+            conn, addr = sock.accept()
+            CONNECTION_NR += 1
+
             # Start Handling
             pt = ProxyThread(conn, addr, CONNECTION_NR)
             pt.daemon = True
             pt.start()
             if args.mt == False:
                 pt.join()
-                pt = None
-                gc.collect()
-            # Client connect
-            conn, addr = sock.accept()
-            CONNECTION_NR += 1
-            print(f"[{CONNECTION_NR}] {datetime.datetime.now()}")
-            print(f'[{CONNECTION_NR}]', '> Connection from '+str(addr[0])+':'+str(addr[1]))
+            pt = None
+            #gc.collect()
     except Exception as e:
-        if args.debug: print(e)
+        print("in main thread")
+        print(e)
         pass
     except KeyboardInterrupt:
         if args.debug: print("Main Thread Keyboard Interrupt...")
