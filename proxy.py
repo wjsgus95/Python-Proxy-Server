@@ -359,7 +359,6 @@ def main():
 
             # Start Handling
             pt = ProxyThread(conn, addr, CONNECTION_NR)
-            pt.daemon = True
             pt.start()
             if args.mt == False:
                 pt.join()
