@@ -162,6 +162,7 @@ class HTTPPacket:
     # Remove hostname from request packet line
     def setURL(self, url):
         new_line = self.line.split(' ')
+        new_line[1] = new_line[1].replace('http://'+url.netloc, '')
         new_line[1] = new_line[1].replace(url.netloc, '')
         self.line = ' '.join(new_line)
     
@@ -176,6 +177,7 @@ class ProxyThread(threading.Thread):
         self.conn = conn  # Client socket
         self.addr = addr  # Client address
         self.svr = socket(AF_INET, SOCK_STREAM)
+        if True: self.svr.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 
         self.first_run = True
         self.nr = nr
@@ -185,16 +187,18 @@ class ProxyThread(threading.Thread):
     def __del__(self):
         try:
             self.conn.shutdown(SHUT_RDWR)
-            self.conn.close()
         except Exception as e:
             if args.debug: print("client shutdown exception in del")
-            print(e)
+            if args.debug: print(e)
+        finally:
+            self.conn.close()
         try:
-            self.svr.close()
+            self.svr.shutdown(SHUT_RDWR)
         except Exception as e:
             if args.debug: print("svr shutdown exception in del")
-            print(e)
+            if args.debug: print(e)
         finally:
+            self.svr.close()
             lock.acquire()
             print(self.buffer)
             lock.release()
@@ -241,33 +245,29 @@ class ProxyThread(threading.Thread):
                 else:
                     req.setHeader('Proxy-Connection', '')
                     req.setHeader('Connection', 'Closed')
-                #req.setURL(url)
+                req.setURL(url)
 
                 #print(f'[{self.nr}]', '>', req.line)
                 self.buffer += f'[{self.nr}] > {req.line}\n'
                 if args.debug:
                     print("requset:")
+                    print('>', req.line)
                     print(*[(k, v) for k, v in zip(req.header, req.header.values())], sep='\n')
                     print('\n')
 
                 # Server connect
                 # and so on...
+                if req.getMethod() == 'CONNECT': break
                 if self.first_run:
-                    if req.getMethod() == 'CONNECT':
-                        #host, port = url.path.split(COLON)
-                        #port = int(port)
-                        break
-                    else:
-                        host = url.netloc
-                        port = HTTP_PORT
+                    host = url.netloc
+                    port = HTTP_PORT
                     
                     self.svr.connect((host, port))
                     self.first_run = False
     
                 # send a client's request to the server
                 # sendall repeatedly calls send untill buffer is empty or error occurs
-                if req.getMethod() != 'CONNECT':
-                    self.svr.sendall(req.pack())
+                self.svr.sendall(req.pack())
                 if args.debug: print("proxy -> server")
     
                 # receive data from the server
@@ -355,6 +355,7 @@ def main():
         while True:
             # Client connect
             conn, addr = sock.accept()
+            if True: conn.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
             CONNECTION_NR += 1
 
             # Start Handling
