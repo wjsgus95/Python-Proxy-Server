@@ -23,9 +23,9 @@ bCRLF = b'\r\n'
 parser = argparse.ArgumentParser()
 # in argparse: argument without dash is a positional argument
 parser.add_argument('port', type=int)
-parser.add_argument('-mt', action='store_true')
-parser.add_argument('-pc', action='store_true')
-parser.add_argument('-debug', action='store_true')
+parser.add_argument('-mt', action='store_true', help='enable multi-threading')
+parser.add_argument('-pc', action='store_true', help='enable persistent-connection')
+parser.add_argument('-debug', action='store_true', help='debug flag on')
 args = parser.parse_args()
 
 CONNECTION_NR = 0
