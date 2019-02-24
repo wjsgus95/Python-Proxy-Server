@@ -1,8 +1,8 @@
-Light Weight Proxy Server Written in Python3
+#Light Weight Proxy Server Written in Python3
 
-Requirement: Python3.6 or above
+##Requirement: Python3.6 or above
     
-Usage: proxy.py [-h] [-mt] [-pc] [-debug] port
+##Usage: proxy.py [-h] [-mt] [-pc] [-debug] port
 
 positional arguments:
   port
