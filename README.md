@@ -9,7 +9,10 @@ positional arguments:
 
 optional arguments:
   -h, --help  show this help message and exit
+
   -mt         enable multi-threading
+
   -pc         enable persistent-connection
+
   -debug      debug flag on
 
